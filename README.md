@@ -1,5 +1,9 @@
 # IMC-Trading
 
+Formatting:
+- When you want to download a log file and add it to our folder, name it {file_name}@{date}{time}.log
+
+
 Summary of how IMC Trading algos will work:
 - Submit 1 Python file
 - Python file contains a Trader class with a "run" function
