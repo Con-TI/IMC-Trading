@@ -1,5 +1,5 @@
 # IMC-Trading
-a
+
 Summary of how IMC Trading algos will work:
 - Submit 1 Python file
 - Python file contains a Trader class with a "run" function
