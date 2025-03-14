@@ -120,7 +120,7 @@ class Trade:
 class TradingState(object):
     '''
     TradingState contains the current iteration's trading state
-    - order_depths : the current order book, indxed
+    - order_depths : the current order book, indexed by symbols
     - timestamp : current time
     - traderData : past data (if we need it)
     - own_trades : the trades our bot has executed (buyer/seller will be "SUBMISSION" to indicate which side we took)

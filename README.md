@@ -1,8 +1,8 @@
 # IMC-Trading
 
 Formatting:
-- When you want to download a log file and add it to our folder, name it {file_name}@{date}{time}.log
-
+- When you want to download a log file and add it to our folder, name it {file_name}@{date}{time}.log. E.g. tutorial1py@14_03_2025_1508.log
+- utilities folder will contain all the stuff that is not related to the main project, like scripts to generate plots, etc.
 
 Summary of how IMC Trading algos will work:
 - Submit 1 Python file
@@ -22,6 +22,9 @@ Overview of classes:
 
 Trading constraints:
 - We will have position limits for every product. If we try to submit an order that would push us over the limit, our order will automatically be rejected.
+
+Overview of log files:
+- Every log file contains: Sandbox log, trade history
 
 Libraries we can use:
 The following libraries are supported in the simulation. Importing other external libraries is not supported.
