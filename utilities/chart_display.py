@@ -33,7 +33,6 @@ class Display():
         ax[1,0].plot(price_data['timestamp'],price_data['ask_price_3'],color='palegreen')
         ax[1,0].plot(price_data['timestamp'],price_data['mid_price'],color='k')
 
-        
         plt.tight_layout()
         plt.show()
         
