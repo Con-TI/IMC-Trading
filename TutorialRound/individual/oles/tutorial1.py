@@ -1,6 +1,7 @@
 from datamodel import OrderDepth, UserId, TradingState, Order
 from typing import List
 import string
+import numpy as np
 
 class Trader:
     '''
@@ -8,10 +9,9 @@ class Trader:
     '''
 
     def __init__(self):
+        
         self.kelp_position = None
         self.resin_position = None
-        self.kelp_pending_orders = None
-        self.resin_pending_orders = None
         self.kelp_limit = self.resin_limit = 50
         self.memory = []
         self.poi_params = None
@@ -33,6 +33,7 @@ class Trader:
         leaky_relu = lambda x : self.m1*(50-x)+1 if x>=50 else self.m2*(10-x)+3
         self.poi_params = {'kelp_bid':leaky_relu(order_ratio['kelp_bids']),'kelp_ask':leaky_relu(order_ratio['kelp_asks']), 'resin_bid':leaky_relu(order_ratio['resin_bids']),'resin_ask':leaky_relu(order_ratio['resin_asks'])}
 
+
     def _derive_order_ratio(self):
         # Calculates order ratio based off of microprice and spread
         kelp_micro_minus_bid = self.kelp_market_conditions['microprice']-self.kelp_market_conditions['best_bid']
@@ -51,15 +52,93 @@ class Trader:
 
         self.order_ratio = {"kelp_bids": kelp_bid_order_num, "kelp_asks": kelp_ask_order_num, "resin_bids": resin_bid_order_num, "resin_asks": resin_ask_order_num}
 
-        def _fetch_inventory_and_pending_orders(self):
-            # Fetches trading state
-            state = TradingState()
-            state = state.toJSON()
 
-            #getting your position (just a single number as buys and sells added)
-            positions = state['position']
-            self.kelp_position = positions['KELP']
-            self.resin_position = positions['RAINFORES_RESIN']
+    def _fetch_inventory_and_pending_orders(self):
+        # Fetches trading state
+        state = TradingState()
+        state = state.toJSON()
 
-            self.kelp_pending_orders = [{'price':order.price,'quantity':order.quantity} for order in pending_orders]
- 
+        #getting your position (just a single number as buys and sells added)
+        positions = state['position']
+        self.kelp_position = positions['KELP']
+        self.resin_position = positions['RAINFORES_RESIN']
+
+
+    def _order_distribution_shift(self):
+        # Calculates the distribution shift we apply (adjusts spread)
+        rel_vol = self.market_conditions['sigma_norm']
+        
+        if abs(rel_vol)>0.1:
+            return 2
+        return 1
+
+
+    def _bid_generator(self):
+        # Generates orders based on order ratio and poisson distribution
+        order_ratio = self.order_ratio
+        steps_from_mid_kelp = np.random.poisson(self.poi_params['kelp_bid'],order_ratio['kelp_bids']) + self._order_distribution_shift()
+        bid_array_kelp = self.market_conditions['midprice']-steps_from_mid_kelp
+        bid_array_kelp = bid_array_kelp[bid_array_kelp>0]
+        bid_prices_kelp = np.unique(bid_array_kelp)
+
+        bid_orders_kelp = [{'kelp price':price,'quantity':len(bid_array_kelp[bid_array_kelp==price])} for price in bid_prices_kelp]
+
+        steps_from_mid_resin = np.random.poisson(self.poi_params['resin_bid'],order_ratio['resin_bids']) + self._order_distribution_shift()
+        bid_array_resin = self.market_conditions['midprice']-steps_from_mid_resin
+        bid_array_resin = bid_array_resin[bid_array_resin>0]
+        bid_prices_resin = np.unique(bid_array_resin)
+
+        bid_orders_resin = [{'resin price':price,'quantity':len(bid_array_resin[bid_array_resin==price])} for price in bid_prices_resin]
+
+        return {'kelp bids': bid_orders_kelp, 'resin bids': bid_orders_resin}
+
+    def _ask_generator(self):
+        # Generates orders based on order ratio and poisson distribution
+        # Generates orders based on order ratio and poisson distribution
+        order_ratio = self.order_ratio
+        steps_from_mid_kelp = np.random.poisson(self.poi_params['kelp_ask'],order_ratio['kelp_asks']) + self._order_distribution_shift()
+        ask_array_kelp = self.market_conditions['midprice']+steps_from_mid_kelp
+        ask_array_kelp = ask_array_kelp[ask_array_kelp>0]
+        ask_prices_kelp = np.unique(ask_array_kelp)
+
+        ask_orders_kelp = [{'kelp price':price,'quantity':-len(ask_array_kelp[ask_array_kelp==price])} for price in ask_prices_kelp]
+
+        steps_from_mid_resin = np.random.poisson(self.poi_params['resin_ask'],order_ratio['resin_asks']) + self._order_distribution_shift()
+        ask_array_resin = self.market_conditions['midprice']+steps_from_mid_resin
+        ask_array_resin = ask_array_resin[ask_array_resin>0]
+        ask_prices_resin = np.unique(ask_array_resin)
+
+        ask_orders_resin = [{'resin price':price,'quantity':-len(ask_array_resin[ask_array_resin==price])} for price in ask_prices_resin]
+
+        return {'kelp asks': ask_orders_kelp, 'resin asks': ask_orders_resin}
+    
+    #need to adapt to my formats above
+    def run(self):
+        pending_bids = self.pending_bids_summary
+        pending_bids_total = sum([order['quantity'] for order in pending_bids])
+        desired_bids = self._bid_generator()
+        desired_bid_prices = [order['price'] for order in desired_bids]
+        diff = 0
+        for order in pending_bids:
+            p = order['price']
+            if p in desired_bid_prices:
+                desired_order = [order for order in desired_bids if order['price'] == p][0]
+                quantity_difference = abs(desired_order['quantity']-order['quantity'])
+                diff += quantity_difference
+            else:
+                diff += order['quantity']
+                
+        pending_asks = self.pending_asks_summary
+        pending_ask_total = sum([order['quantity'] for order in pending_asks])
+        desired_asks = self._bid_generator()
+        desired_ask_prices = [order['price'] for order in desired_asks]
+        for order in pending_asks:
+            p = order['price']
+            if p in desired_ask_prices:
+                desired_order = [order for order in desired_asks if order['price'] == p][0]
+                quantity_difference = abs(desired_order['quantity']-order['quantity'])
+                diff += quantity_difference
+            else:
+                diff += order['quantity']
+        if diff >= 20 or (pending_ask_total+pending_bids_total)<70:
+            self._quotes_reset()
