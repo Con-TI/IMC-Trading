@@ -13,7 +13,6 @@ class Trader:
         self.kelp_position = None
         self.resin_position = None
         self.kelp_limit = self.resin_limit = 50
-        self.memory = []
         self.poi_params = None
 
         #dict of total bids and asks desired
@@ -23,8 +22,8 @@ class Trader:
         self.m1 = 0.01
         self.m2 = 0.05
 
-        self.kelp_market_conditions = {'spread':None,'midprice':None, 'microprice':None, 'sigma_norm':None, 'best_ask':None, 'best_bid':None}
-        self.resin_market_conditions = {'spread':None,'midprice':None, 'microprice':None, 'sigma_norm':None, 'best_ask':None, 'best_bid':None}
+        self.kelp_market_conditions = {'spread':None,'midprice':None, 'microprice':None, 'best_ask':None, 'best_bid':None}
+        self.resin_market_conditions = {'spread':None,'midprice':None, 'microprice':None, 'best_ask':None, 'best_bid':None}
 
 
     def _poi_param(self):
@@ -53,7 +52,7 @@ class Trader:
         self.order_ratio = {"kelp_bids": kelp_bid_order_num, "kelp_asks": kelp_ask_order_num, "resin_bids": resin_bid_order_num, "resin_asks": resin_ask_order_num}
 
 
-    def _fetch_inventory_and_pending_orders(self):
+    def _fetch_inventory(self):
         # Fetches trading state
         state = TradingState()
         state = state.toJSON()
@@ -65,26 +64,22 @@ class Trader:
 
 
     def _order_distribution_shift(self):
-        # Calculates the distribution shift we apply (adjusts spread)
-        rel_vol = self.market_conditions['sigma_norm']
-        
-        if abs(rel_vol)>0.1:
-            return 2
-        return 1
+        #just matching the old spread - dont have past data to calculate the rel vol
+        return self.kelp_market_conditions['spread'], self.resin_market_conditions['spread']
 
 
     def _bid_generator(self):
         # Generates orders based on order ratio and poisson distribution
         order_ratio = self.order_ratio
-        steps_from_mid_kelp = np.random.poisson(self.poi_params['kelp_bid'],order_ratio['kelp_bids']) + self._order_distribution_shift()
-        bid_array_kelp = self.market_conditions['midprice']-steps_from_mid_kelp
+        steps_from_mid_kelp = np.random.poisson(self.poi_params['kelp_bid'],order_ratio['kelp_bids']) + self._order_distribution_shift()[0]
+        bid_array_kelp = self.kelp_market_conditions['midprice']-steps_from_mid_kelp
         bid_array_kelp = bid_array_kelp[bid_array_kelp>0]
         bid_prices_kelp = np.unique(bid_array_kelp)
 
         bid_orders_kelp = [{'kelp price':price,'quantity':len(bid_array_kelp[bid_array_kelp==price])} for price in bid_prices_kelp]
 
-        steps_from_mid_resin = np.random.poisson(self.poi_params['resin_bid'],order_ratio['resin_bids']) + self._order_distribution_shift()
-        bid_array_resin = self.market_conditions['midprice']-steps_from_mid_resin
+        steps_from_mid_resin = np.random.poisson(self.poi_params['resin_bid'],order_ratio['resin_bids']) + self._order_distribution_shift()[1]
+        bid_array_resin = self.resin_market_conditions['midprice']-steps_from_mid_resin
         bid_array_resin = bid_array_resin[bid_array_resin>0]
         bid_prices_resin = np.unique(bid_array_resin)
 
@@ -96,15 +91,15 @@ class Trader:
         # Generates orders based on order ratio and poisson distribution
         # Generates orders based on order ratio and poisson distribution
         order_ratio = self.order_ratio
-        steps_from_mid_kelp = np.random.poisson(self.poi_params['kelp_ask'],order_ratio['kelp_asks']) + self._order_distribution_shift()
-        ask_array_kelp = self.market_conditions['midprice']+steps_from_mid_kelp
+        steps_from_mid_kelp = np.random.poisson(self.poi_params['kelp_ask'],order_ratio['kelp_asks']) + self._order_distribution_shift()[0]
+        ask_array_kelp = self.kelp_market_conditions['midprice']+steps_from_mid_kelp
         ask_array_kelp = ask_array_kelp[ask_array_kelp>0]
         ask_prices_kelp = np.unique(ask_array_kelp)
 
         ask_orders_kelp = [{'kelp price':price,'quantity':-len(ask_array_kelp[ask_array_kelp==price])} for price in ask_prices_kelp]
 
-        steps_from_mid_resin = np.random.poisson(self.poi_params['resin_ask'],order_ratio['resin_asks']) + self._order_distribution_shift()
-        ask_array_resin = self.market_conditions['midprice']+steps_from_mid_resin
+        steps_from_mid_resin = np.random.poisson(self.poi_params['resin_ask'],order_ratio['resin_asks']) + self._order_distribution_shift()[1]
+        ask_array_resin = self.resin_market_conditions['midprice']+steps_from_mid_resin
         ask_array_resin = ask_array_resin[ask_array_resin>0]
         ask_prices_resin = np.unique(ask_array_resin)
 
@@ -112,33 +107,65 @@ class Trader:
 
         return {'kelp asks': ask_orders_kelp, 'resin asks': ask_orders_resin}
     
+
+    def update_all(self):
+        self._update_market_conditions()
+        self._fetch_inventory()
+        self._derive_order_ratio()
+        self._poi_param()
+        self._order_distribution_shift()
+
+    def _update_market_conditions(self):
+        # Fetches current market conditions
+        # Fetches trading state
+        state = TradingState()
+        state = state.toJSON()
+
+        kelp_order_depths = state['order_depths']['KELP']
+        resin_order_depths = state['order_depths']['RAINFOREST_RESIN']
+
+        kelp_max_buy = None
+        kelp_max_buy_vol = None
+        kelp_min_ask = None
+        kelp_min_ask_vol = None
+        for order_price, order_vol in getattr(kelp_order_depths, 'buy_orders'):
+            if kelp_max_buy is None or order_price>kelp_max_buy:
+                kelp_max_buy = order_price
+                kelp_max_buy_vol = order_vol
+
+        for order_price, order_vol in getattr(kelp_order_depths, 'sell_orders'):
+            if kelp_min_ask is None or order_price>kelp_min_ask:
+                kelp_min_ask = order_price
+                kelp_min_ask_vol = order_vol
+
+        resin_max_buy = None
+        resin_max_buy_vol = None
+        resin_min_ask = None
+        resin_min_ask_vol = None
+        for order_price, order_vol in getattr(resin_order_depths, 'buy_orders'):
+            if resin_max_buy is None or order_price>resin_max_buy:
+                resin_max_buy = order_price
+                resin_max_buy_vol = order_vol
+
+        for order_price, order_vol in getattr(resin_order_depths, 'sell_orders'):
+            if resin_min_ask is None or order_price>resin_min_ask:
+                resin_min_ask = order_price
+                resin_min_ask_vol = order_vol
+
+        self.kelp_market_conditions['midprice'] =  (kelp_min_ask+kelp_max_buy)/2
+        self.kelp_market_conditions['microprice'] = (kelp_min_ask*kelp_max_buy_vol+kelp_max_buy*kelp_min_ask_vol)/(kelp_max_buy_vol+kelp_min_ask_vol)
+        self.kelp_market_conditions['spread'] = kelp_max_buy-kelp_min_ask
+        self.kelp_market_conditions['best_ask'] = kelp_min_ask
+        self.kelp_market_conditions['best_bid'] =  kelp_max_buy
+
+        self.resin_market_conditions['midprice'] =  (resin_min_ask+resin_max_buy)/2
+        self.resin_market_conditions['microprice'] = (resin_min_ask*resin_max_buy_vol+resin_max_buy*resin_min_ask_vol)/(resin_max_buy_vol+resin_min_ask_vol)
+        self.resin_market_conditions['spread'] = resin_max_buy-resin_min_ask
+        self.resin_market_conditions['best_ask'] = resin_min_ask
+        self.resin_market_conditions['best_bid'] =  resin_max_buy
+        
+
+
     #need to adapt to my formats above
-    def run(self):
-        pending_bids = self.pending_bids_summary
-        pending_bids_total = sum([order['quantity'] for order in pending_bids])
-        desired_bids = self._bid_generator()
-        desired_bid_prices = [order['price'] for order in desired_bids]
-        diff = 0
-        for order in pending_bids:
-            p = order['price']
-            if p in desired_bid_prices:
-                desired_order = [order for order in desired_bids if order['price'] == p][0]
-                quantity_difference = abs(desired_order['quantity']-order['quantity'])
-                diff += quantity_difference
-            else:
-                diff += order['quantity']
-                
-        pending_asks = self.pending_asks_summary
-        pending_ask_total = sum([order['quantity'] for order in pending_asks])
-        desired_asks = self._bid_generator()
-        desired_ask_prices = [order['price'] for order in desired_asks]
-        for order in pending_asks:
-            p = order['price']
-            if p in desired_ask_prices:
-                desired_order = [order for order in desired_asks if order['price'] == p][0]
-                quantity_difference = abs(desired_order['quantity']-order['quantity'])
-                diff += quantity_difference
-            else:
-                diff += order['quantity']
-        if diff >= 20 or (pending_ask_total+pending_bids_total)<70:
-            self._quotes_reset()
+    def run(self, state: TradingState):
+        pass
