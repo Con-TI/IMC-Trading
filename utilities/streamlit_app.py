@@ -3,7 +3,21 @@ import log_processor
 import os
 import altair as alt
 
+st.set_page_config(layout="wide")
+
 st.header('IMC Trading logs plot')
+
+#-------------------------------------------------Setup -------------------------------------------------------
+
+if "vline_x" not in st.session_state:
+    st.session_state["vline_x"] = 0
+    
+def move_left():
+    st.session_state["vline_x"] -= 1  # Move left
+
+def move_right():
+    st.session_state["vline_x"] += 1  # Move right
+
 
 file_paths = ["TutorialRound/logs","Round1/logs","Round2/logs","Round3/logs","Round4/logs"]
 option_path = st.selectbox(
@@ -29,7 +43,8 @@ trades_df = trades_df[(trades_df['buyer'] == 'SUBMISSION') | (trades_df['seller'
 lambd = lambda buy,sell: "buy" if buy == "SUBMISSION" else "sell"
 trades_df['side'] = trades_df.apply(lambda row: "buy" if row['buyer'] == "SUBMISSION" else "sell", axis=1)
 
-# Plots
+#-------------------------------------------------Plots -------------------------------------------------------
+
 df_melt = df[['timestamp','bid_price_1', 'ask_price_1', 'mid_price']].melt(id_vars=['timestamp'], var_name='Series', value_name='y')
 color_scale = alt.Scale(
     domain=['bid_price_1', 'ask_price_1', 'mid_price'],
@@ -49,6 +64,22 @@ trade_points = alt.Chart(trades_df).mark_circle(size=100).encode(
 )
 
 chart = chart + trade_points
+
+vols = df[['timestamp','bid_volume_1', 'ask_volume_1']]
+vols['ask_volume_1'] *= -1
+
+df_melt = vols.melt(id_vars=['timestamp'],var_name='Series',value_name='y')
+color_scale = alt.Scale(
+    domain = ['bid_volume_1','ask_volume_1'],
+    range = ['red','green']
+)
+
+volume_chart = alt.Chart(df_melt).mark_line().encode(
+    x=alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
+    y = alt.Y('y:Q',scale=alt.Scale(domain=[df['ask_volume_1'].min()-10,df['bid_volume_1'].max()+10]), axis=alt.Axis(title='Bid vol Ask vol')),
+    color = alt.Color('Series:N', scale = color_scale),
+).properties(title='Volume')
+
 
 df['loss'] = df['profit_and_loss'].clip(upper=0)
 df['profit'] = df['profit_and_loss'].clip(lower=0)
@@ -71,12 +102,22 @@ area_chart = area_negative + area_positive + line
 area_chart.properties(
     title=f'Profit and Loss',
 )
-chart = alt.vconcat(chart, area_chart).configure_axisX(
+chart = alt.vconcat(chart, volume_chart, area_chart).resolve_scale(
+    x='shared',
+    y='independent').configure_axisX(
     labelAngle=0
-).interactive()
+)
+
+#-------------------------------------------------Display -------------------------------------------------------
 
 # Display in Streamlit
 st.altair_chart(chart, use_container_width=True)
+
+col1, col2 = st.columns([1, 1])
+with col1:
+    st.button("⬅ Left", on_click=move_left)
+with col2:
+    st.button("Right ➡", on_click=move_right)
 
 # Display dataframe
 st.write("Activities log")
