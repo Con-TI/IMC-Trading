@@ -36,93 +36,18 @@ trades_df['side'] = trades_df.apply(lambda row: "buy" if row['buyer'] == "SUBMIS
 if "vline_x" not in st.session_state:
     st.session_state["vline_x"] = df['timestamp'].iloc[0] 
 
-#-------------------------------------------------Plots -------------------------------------------------------
-
-df_melt = df[['timestamp','bid_price_1', 'ask_price_1', 'mid_price']].melt(id_vars=['timestamp'], var_name='Series', value_name='y')
-color_scale = alt.Scale(
-    domain=['bid_price_1', 'ask_price_1', 'mid_price'],
-    range=['red', 'green', 'black']
-)
-
-chart = alt.Chart(df_melt).mark_line().encode(
-    x=alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
-    y=alt.Y('y:Q',scale=alt.Scale(domain=[df['bid_price_1'].min()-10,df['ask_price_1'].max()+10]), axis=alt.Axis(title="Bid Ask Mid price")),
-    color=alt.Color('Series:N',scale = color_scale)
-).properties( title=f'Price',
-             height = 300)
-
-trade_points = alt.Chart(trades_df).mark_circle(size=100).encode(
-    x='timestamp:Q',
-    y='price:Q',
-    tooltip=['time:T', 'price:Q', 'side:N', 'quantity:Q']
-)
-
-# Vertical Line
+#------------------------------------------------- Orderbook Display -------------------------------------------------------
 vline_x = st.session_state["vline_x"]
-vline = (
-    alt.Chart(pd.DataFrame({"x": [vline_x]}))
-    .mark_rule(color="black", strokeWidth=2)
-    .encode(x="x:Q")
-)
-chart = chart + trade_points + vline
-
-vols = df[['timestamp','bid_volume_1', 'ask_volume_1']]
-vols['ask_volume_1'] *= -1
-
-df_melt = vols.melt(id_vars=['timestamp'],var_name='Series',value_name='y')
-color_scale = alt.Scale(
-    domain = ['bid_volume_1','ask_volume_1'],
-    range = ['red','green']
-)
-
-volume_chart = alt.Chart(df_melt).mark_line().encode(
-    x=alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
-    y = alt.Y('y:Q',scale=alt.Scale(domain=[vols['ask_volume_1'].min()-20,vols['bid_volume_1'].max()+20]), axis=alt.Axis(title='Bid vol Ask vol')),
-    color = alt.Color('Series:N', scale = color_scale),
-).properties(title='Volume',
-             height = 200,
-             bounds="flush")
-
-
-df['loss'] = df['profit_and_loss'].clip(upper=0)
-df['profit'] = df['profit_and_loss'].clip(lower=0)
-
-line = alt.Chart(df).mark_line(color='black').encode(
-    x = alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
-    y = alt.Y('profit_and_loss:Q', axis=alt.Axis(title="Profit and loss"))
-)
-
-area_positive = alt.Chart(df).mark_area(color='green',opacity=0.3).encode(
-    x='timestamp:Q',
-    y='profit:Q'
-)
-area_negative = alt.Chart(df).mark_area(color='red',opacity=0.3).encode(
-    x='timestamp:Q',
-    y='loss:Q'
-)
-
-area_chart = area_negative + area_positive + line
-area_chart.properties(
-    title=f'Profit and Loss',
-)
-
-# chart = alt.vconcat(chart, volume_chart, area_chart).resolve_scale(
-#     x='shared',
-#     y='independent').configure_axisX(
-#     labelAngle=0
-# )
-
-#-------------------------------------------------Display -------------------------------------------------------
-
 # Display in Streamlit
 col1, col2 = st.columns([2, 1])
-with col1:
-    st.altair_chart(chart, use_container_width=True)
-    st.altair_chart(volume_chart, use_container_width=True)
-    st.altair_chart(area_chart, use_container_width=True)
-
 with col2:    
-    filtered_df = df[df["timestamp"] == vline_x]
+    timestamp_selector = st.selectbox(
+     'Timestamp:',
+     [i for i in range(df['timestamp'].iloc[0],df['timestamp'].iloc[-1]+1,100)])
+    
+    st.session_state["vline_x"] = timestamp_selector
+    
+    filtered_df = df[df["timestamp"] == timestamp_selector]
     order_book = pd.DataFrame({
         "Bid Volume": filtered_df[["bid_volume_1", "bid_volume_2", "bid_volume_3"]].values.flatten(),
         "Bid Price": filtered_df[["bid_price_1", "bid_price_2", "bid_price_3"]].values.flatten(),
@@ -156,8 +81,7 @@ with col2:
     
     st.table(price_ladder)
     
-    
-    col_btn1, col_btn2 = st.columns([1, 1])
+    col_btn1, _, col_btn2 = st.columns([1 ,1 ,1])
     with col_btn1:
         if st.button("⬅ Left") and vline_x > 0:
             st.session_state["vline_x"] -= 100
@@ -167,6 +91,81 @@ with col2:
             st.session_state["vline_x"] += 100
             st.rerun()
 
+#-------------------------------------------------Plots -------------------------------------------------------
+
+df_melt = df[['timestamp','bid_price_1', 'ask_price_1', 'mid_price']].melt(id_vars=['timestamp'], var_name='Series', value_name='y')
+color_scale = alt.Scale(
+    domain=['bid_price_1', 'ask_price_1', 'mid_price'],
+    range=['red', 'green', 'black']
+)
+
+chart = alt.Chart(df_melt).mark_line().encode(
+    x=alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
+    y=alt.Y('y:Q',scale=alt.Scale(domain=[df['bid_price_1'].min()-10,df['ask_price_1'].max()+10]), axis=alt.Axis(title="Bid Ask Mid price")),
+    color=alt.Color('Series:N',scale = color_scale)
+).properties( title=f'Price',
+             height = 300)
+
+trade_points = alt.Chart(trades_df).mark_circle(size=100).encode(
+    x='timestamp:Q',
+    y='price:Q',
+    tooltip=['time:T', 'price:Q', 'side:N', 'quantity:Q']
+)
+
+# Vertical Line
+vline_x = st.session_state["vline_x"]
+vline = alt.Chart(pd.DataFrame({"x": [vline_x]})).mark_rule(color="black", strokeWidth=2).encode(x="x:Q")
+chart = chart + trade_points + vline
+
+vols = df[['timestamp','bid_volume_1', 'ask_volume_1']]
+vols['ask_volume_1'] *= -1
+
+df_melt = vols.melt(id_vars=['timestamp'],var_name='Series',value_name='y')
+color_scale = alt.Scale(
+    domain = ['bid_volume_1','ask_volume_1'],
+    range = ['red','green']
+)
+
+volume_chart = alt.Chart(df_melt).mark_line().encode(
+    x=alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
+    y = alt.Y('y:Q',scale=alt.Scale(domain=[vols['ask_volume_1'].min()-20,vols['bid_volume_1'].max()+20]), axis=alt.Axis(title='Bid vol Ask vol')),
+    color = alt.Color('Series:N', scale = color_scale),
+).properties(title='Volume',
+             height = 200)
+
+vline_x = st.session_state["vline_x"]
+vline = alt.Chart(pd.DataFrame({"x": [vline_x]})).mark_rule(color="black", strokeWidth=2).encode(x="x:Q")
+
+volume_chart = volume_chart + vline
+
+
+df['loss'] = df['profit_and_loss'].clip(upper=0)
+df['profit'] = df['profit_and_loss'].clip(lower=0)
+
+line = alt.Chart(df).mark_line(color='black').encode(
+    x = alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
+    y = alt.Y('profit_and_loss:Q', axis=alt.Axis(title="Profit and loss"))
+)
+
+area_positive = alt.Chart(df).mark_area(color='green',opacity=0.3).encode(
+    x='timestamp:Q',
+    y='profit:Q'
+)
+area_negative = alt.Chart(df).mark_area(color='red',opacity=0.3).encode(
+    x='timestamp:Q',
+    y='loss:Q'
+)
+
+area_chart = area_negative + area_positive + line
+area_chart.properties(
+    title=f'Profit and Loss',
+)
+
+with col1:
+    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(volume_chart, use_container_width=True)
+    st.altair_chart(area_chart, use_container_width=True)
+    
 # Display dataframe
 st.write("Activities log")
 st.write(df)
