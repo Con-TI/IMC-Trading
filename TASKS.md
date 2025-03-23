@@ -6,7 +6,8 @@ Tasks:
     - [] 
 - [x] Make visualization (could copy from some git)
     - [x] Streamlit app to show charts and dataframes
-    - [x] Log processor
+    - [x] Log processor (takes logs and makes dataframes)
+    - [] Data processor (takes dataframes and processes it (e.g. makes orderbooks, etc. and others to display on streamlit))
     - [] Streamlist app has arrow keys to scroll through each order book at every timestamp
 - [] Rounds (bots/algos to make):
     - [] All rounds:
@@ -15,4 +16,3 @@ Tasks:
         - [] Bots to make:
             - [] Whale LP from algosoc competition
             - [] 
-    
