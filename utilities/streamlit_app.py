@@ -80,16 +80,6 @@ with col2:
     price_ladder = price_ladder.style.apply(highlight_rows, axis=1)
     
     st.table(price_ladder)
-    
-    col_btn1, _, col_btn2 = st.columns([1 ,1 ,1])
-    with col_btn1:
-        if st.button("⬅ Left") and vline_x > 0:
-            st.session_state["vline_x"] -= 100
-            st.rerun()
-    with col_btn2:
-        if st.button("➡ Right") and vline_x < df['timestamp'].iloc[-1] - 1:
-            st.session_state["vline_x"] += 100
-            st.rerun()
 
 #-------------------------------------------------Plots -------------------------------------------------------
 
