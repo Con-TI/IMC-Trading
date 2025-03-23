@@ -15,4 +15,4 @@ Tasks:
     - [] Tutorial round:
         - [] Bots to make:
             - [] Whale LP from algosoc competition
-            - [] 
+            - [] ...
