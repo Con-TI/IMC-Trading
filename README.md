@@ -1,7 +1,7 @@
 # IMC-Trading
 
 Formatting:
-- When you want to download a log file and add it to our folder, name it {file_name}@{date}{time}.log. E.g. tutorial1py@14_03_2025_1508.log
+- When you want to download a log file and add it to our folder, name it {file_name}@{date}{24 hr time}.log. E.g. tutorial1py@14_03_2025_1508.log
 - utilities folder will contain all the stuff that is not related to the main project, like scripts to generate plots, etc.
 
 Summary of how IMC Trading algos will work:
@@ -25,6 +25,11 @@ Trading constraints:
 
 Overview of log files:
 - Every log file contains: Sandbox log, trade history
+- How to visualize log files:
+    Go to utilities streamlit_app.py
+    Run "streamlit run streamlit_app.py" from an integrated terminal from the utilities folder.
+    Go to the link that is shown in the terminal. This will open a streamlit app. 
+    Rest should be straightforward based on the streamlit app.
 
 Libraries we can use:
 The following libraries are supported in the simulation. Importing other external libraries is not supported.
