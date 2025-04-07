@@ -8,10 +8,12 @@ Tasks:
     - [x] Streamlit app to show charts and dataframes
     - [x] Log processor (takes logs and makes dataframes)
     - [x] Streamlit app has orderbook
+    - [] Streamlit app shows position over time for the product
 - [] Rounds (bots/algos to make):
     - [] All rounds:
         - [] Find a way to check against 2024 and 2023 data to see if we have an exact match. ** Explanation: If we do, would be safe to say that the bots they've made are working in the exact same way so we can exploit that since the price path roughly moves the same regardless of what our bot does, i.e. we can take advantage of look ahead bias. **
     - [] Tutorial round:
         - [] Bots to make:
-            - [] Whale LP from algosoc competition
+            - [x] Whale LP from algosoc competition
+            - [x] GithubRepo Tutorial bot
             - [] ...
