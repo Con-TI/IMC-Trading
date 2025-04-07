@@ -106,6 +106,12 @@ class Trader:
 
     def resin_orders(self, *, order_depth : OrderDepth) -> List[Order]:
         orders : List[Order] = [] 
+        order = Order(Product.RESIN, 10002, int(self.max_orderable[Product.RESIN]['sell']))
+        orders.append(order)
+        order = Order(Product.RESIN, 9998, int(self.max_orderable[Product.RESIN]['buy']))
+        orders.append(order)
+        return orders
+        
         buy_orders = order_depth.buy_orders
         sell_orders = order_depth.sell_orders
         
