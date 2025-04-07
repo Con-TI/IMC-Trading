@@ -113,13 +113,13 @@ chart = alt.Chart(df_melt).mark_line().encode(
     x=alt.X('timestamp:Q', axis=alt.Axis(title="Timestamp")),
     y=alt.Y('y:Q',scale=alt.Scale(domain=[df['bid_price_1'].min()-10,df['ask_price_1'].max()+10]), axis=alt.Axis(title="Bid Ask Mid price")),
     color=alt.Color('Series:N',scale = color_scale)
-).properties( title=f'Price',
+).properties( title=f'Price ({round(100*len(trades_df)/len(log_processor.trade_history[log_processor.trade_history['symbol']==prod]))}% timestamps traded)',
              height = 300)
 
 trade_points = alt.Chart(trades_df).mark_circle(size=100).encode(
     x='timestamp:Q',
     y='price:Q',
-    tooltip=['time:T', 'price:Q', 'side:N', 'quantity:Q']
+    tooltip=['timestamp:Q', 'price:Q', 'side:N', 'quantity:Q']
 )
 
 # Vertical Line
