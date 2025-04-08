@@ -30,9 +30,9 @@ class LogProcessor:
         self.sandbox_logs = self.sandbox_logs.set_index('timestamp')
         
         # Reads the activities_log csv
-        self.activites_log = re.search(r'Activities log:(.*?)Trade History:', self.log_file, re.DOTALL)
-        self.activites_log = self.activites_log.group(1).strip()
-        self.activites_log = pd.read_csv(StringIO(self.activites_log), sep=";")
+        self.activities_log = re.search(r'Activities log:(.*?)Trade History:', self.log_file, re.DOTALL)
+        self.activities_log = self.activities_log.group(1).strip()
+        self.activities_log = pd.read_csv(StringIO(self.activities_log), sep=";")
         
         # Reads the trade history list
         self.trade_history = re.search(r'Trade History:(.*?)]', self.log_file, re.DOTALL)
@@ -47,8 +47,14 @@ if __name__ == '__main__':
     log_file_path = {Round name}/logs/{filename}.log
     '''
     
-    log_processor = LogProcessor('TutorialRound/logs/tutorial1py@14_03_2025_1508.log')
+    # log_processor = LogProcessor('TutorialRound/logs/tutorial1py@14_03_2025_1508.log')
+    # log_processor.read_log()
+    # print(log_processor.sandbox_logs)
+    # print(log_processor.activites_log)
+    # print(log_processor.trade_history)
+
+    log_processor = LogProcessor('Round1/logs/nothing_bot@07_04_2025_1300.log')
     log_processor.read_log()
     print(log_processor.sandbox_logs)
-    print(log_processor.activites_log)
+    print(log_processor.activities_log)
     print(log_processor.trade_history)
