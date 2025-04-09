@@ -11,7 +11,7 @@ st.set_page_config(layout="wide")
 st.header('IMC Trading logs plot')
 
 #-------------------------------------------------Setup -------------------------------------------------------
-file_paths = ["TutorialRound/logs","Round1/logs","Round2/logs","Round3/logs","Round4/logs"]
+file_paths = ["TutorialRound/logs","Round1/logs","Round2/logs","Round3/logs","Round4/logs","backtests"]
 option_path = st.selectbox(
      'Round:',
      file_paths)
@@ -27,9 +27,9 @@ log_processor.read_log()
 
 prod = st.selectbox(
     'Plot:',
-    log_processor.activites_log['product'].unique()
+    log_processor.activities_log['product'].unique()
 )
-df = log_processor.activites_log[log_processor.activites_log['product']==prod]
+df = log_processor.activities_log[log_processor.activities_log['product']==prod]
 
 trades_df = log_processor.trade_history[log_processor.trade_history['symbol']==prod]
 trades_df = trades_df[(trades_df['buyer'] == 'SUBMISSION') | (trades_df['seller'] == 'SUBMISSION')]
@@ -55,7 +55,7 @@ with col2:
     idx = st.session_state['vline_x']//100
     timestamp_selector = st.selectbox(
      'Timestamp:',
-     [i for i in range(df['timestamp'].iloc[0],df['timestamp'].iloc[-1]+1,100)],
+     [i for i in range(int(df['timestamp'].iloc[0]),int(df['timestamp'].iloc[-1]+1),100)],
      index = int(idx))
     
     if not st.session_state['animate']:
@@ -100,6 +100,12 @@ with col2:
         st.session_state["vline_x"] = timestamp_selector
     if st.button("Stop Animation"):
         st.session_state['animate'] = False
+    
+    if st.button("Next Timestamp"):
+        st.session_state["vline_x"] += 100
+    
+    if st.button("Prev Timestamp"):
+        st.session_state["vline_x"] -= 100
 
 #-------------------------------------------------Plots -------------------------------------------------------
 
@@ -183,7 +189,7 @@ line = alt.Chart(df).mark_line(color='black').encode(
     y = alt.Y('profit_and_loss:Q', scale=alt.Scale(domain=[df['loss'].min()-100,df['profit'].max()+100]), axis=alt.Axis(title="Profit and loss"))
 ).properties(
     height=300,
-    title=f'Profit and Loss',
+    title=f'Profit and Loss, Final:{df['profit_and_loss'].iloc[-1]}, \nTimestamp Value:{df['profit_and_loss'].iloc[timestamp_selector//100]}',
 )
 
 
@@ -245,7 +251,7 @@ st.write(log_processor.trade_history)
 if st.session_state["animate"]:
     if st.session_state['vline_x'] < df['timestamp'].iloc[-1]:
         st.session_state["vline_x"] += 100
-        time.sleep(0.02)
+        time.sleep(0.1)
         st.rerun()
     else:
         st.session_state.animate = False
