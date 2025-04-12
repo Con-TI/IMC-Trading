@@ -251,7 +251,7 @@ st.write(log_processor.trade_history)
 if st.session_state["animate"]:
     if st.session_state['vline_x'] < df['timestamp'].iloc[-1]:
         st.session_state["vline_x"] += 100
-        time.sleep(0.1)
+        time.sleep(0.5)
         st.rerun()
     else:
         st.session_state.animate = False

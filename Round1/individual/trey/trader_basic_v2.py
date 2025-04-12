@@ -30,6 +30,7 @@ SQUID_PARAMETERS = {
     # "coeff": -0.01412783,
     "std" : 0.001182054165445773,
     "take_edge": 1,
+    'default_edge':1,
     "clear_edge": 1,
     "volatility coeff":1,
     "minimum_volume_signal":5,
@@ -56,23 +57,28 @@ class Trader:
         self.__unpack_state(state)
         self.__update_lists(state.order_depths)
         
-        squid_kwargs : dict = {
-            "order_depth" : squid_order_depth,
-            "product" : Product.SQUID,
-            "edge" : SQUID_PARAMETERS['take_edge'],
-            "minimum_volume_signal" : SQUID_PARAMETERS['minimum_volume_signal']
-        }
+        # squid_kwargs : dict = {
+        #     "order_depth" : squid_order_depth,
+        #     "product" : Product.SQUID,
+        #     "edge" : SQUID_PARAMETERS['take_edge'],
+        #     "minimum_volume_signal" : SQUID_PARAMETERS['minimum_volume_signal']
+        # }
         self.squid_fair_val()
-        squid_take_orders, buy_vol, sell_vol = self.market_taker_orders(**squid_kwargs)
-        squid_kwargs : dict = {
-            "order_depth" : squid_order_depth,
-            "product" : Product.SQUID,
-            "edge" : SQUID_PARAMETERS['clear_edge'],
-            "minimum_volume_signal" : SQUID_PARAMETERS['minimum_volume_signal']
-        }
+        # squid_take_orders, buy_vol, sell_vol = self.market_taker_orders(**squid_kwargs)
+        squid_take_orders = []
+        
+        # squid_kwargs : dict = {
+        #     "order_depth" : squid_order_depth,
+        #     "product" : Product.SQUID,
+        #     "edge" : SQUID_PARAMETERS['clear_edge'],
+        #     "minimum_volume_signal" : SQUID_PARAMETERS['minimum_volume_signal']
+        # }
         # squid_clear_orders, buy_vol, sell_vol = self.clear_positions_orders(buy_vol,sell_vol, **squid_kwargs)
         squid_clear_orders = []
-        squid_orders = squid_take_orders + squid_clear_orders
+        
+        squid_market_make = self.squid_market_maker_orders(order_depth = squid_order_depth)
+        
+        squid_orders = squid_take_orders + squid_clear_orders + squid_market_make
         
         result = {}
         result[Product.SQUID] = squid_orders
@@ -159,9 +165,9 @@ class Trader:
         return orders, buy_vol, sell_vol
         
                 
-    def squid_market_maker_orders(self, *, order_depth : OrderDepth) -> List[Order]:
+    def squid_market_maker_orders(self, *, order_depth : OrderDepth = None) -> List[Order]:
         orders = []
-
+        mid = max(order_depth.sell_orders.keys())+max(order_depth.buy_orders.keys())/2
         predicted_fair = self.fair_prices[Product.SQUID]
         edge = SQUID_PARAMETERS['default_edge']
         buy_order = Order(Product.SQUID,int(predicted_fair-edge),self.max_orderable[Product.SQUID]['buy'])
