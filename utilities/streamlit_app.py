@@ -30,6 +30,7 @@ prod = st.selectbox(
     log_processor.activities_log['product'].unique()
 )
 df = log_processor.activities_log[log_processor.activities_log['product']==prod]
+total_pnl = sum([log_processor.activities_log[log_processor.activities_log['product']==product]['profit_and_loss'].iloc[-1] for product in log_processor.activities_log['product'].unique()])
 
 trades_df = log_processor.trade_history[log_processor.trade_history['symbol']==prod]
 trades_df = trades_df[(trades_df['buyer'] == 'SUBMISSION') | (trades_df['seller'] == 'SUBMISSION')]
@@ -189,7 +190,7 @@ line = alt.Chart(df).mark_line(color='black').encode(
     y = alt.Y('profit_and_loss:Q', scale=alt.Scale(domain=[df['loss'].min()-100,df['profit'].max()+100]), axis=alt.Axis(title="Profit and loss"))
 ).properties(
     height=300,
-    title=f'Profit and Loss, Final:{df['profit_and_loss'].iloc[-1]}, \nTimestamp Value:{df['profit_and_loss'].iloc[timestamp_selector//100]}',
+    title=f'Profit and Loss, Final:{df['profit_and_loss'].iloc[-1]}, Total PnL for all:{total_pnl} \nTimestamp Value:{df['profit_and_loss'].iloc[timestamp_selector//100]}',
 )
 
 
@@ -251,7 +252,7 @@ st.write(log_processor.trade_history)
 if st.session_state["animate"]:
     if st.session_state['vline_x'] < df['timestamp'].iloc[-1]:
         st.session_state["vline_x"] += 100
-        time.sleep(0.1)
+        time.sleep(0.5)
         st.rerun()
     else:
         st.session_state.animate = False
