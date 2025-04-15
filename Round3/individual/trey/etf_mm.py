@@ -138,6 +138,7 @@ class Trader:
         spread_data['prev_basket_ask'] = best_ask
 
         actual_mid = (best_bid+best_ask)/2
+        return actual_mid
         
         spread = synthetic_mid-actual_mid     
         spread_product = None
