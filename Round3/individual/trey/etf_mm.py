@@ -12,24 +12,15 @@ class Product:
     CROISSANTS = "CROISSANTS"
     JAMS = "JAMS"
     DJEMBES = "DJEMBES"
-    SYNTHETIC = "SYNTHETIC"
-    SPREAD_1 = "SPREAD_1"
-    SPREAD_2 = "SPREAD_2"
-
 
 PARAMS = {
-    Product.SPREAD_1: {
+    Product.PICNIC_1 : {
+        "trade_impulse_adj" : 5.0,
+        "tick_size" : 1.0,
+        "history_length" : 6,
+        "default_volatility" : 4.86,
         "default_spread_mean": 48.762433333333334,
-        "default_spread_std": 85.11945080948948944,
-        "difference_std" : 0.5,
-        "spread_std_window": 45,
-    },
-    Product.SPREAD_2: {
-        "default_spread_mean": 30.23596666666666,
-        "default_spread_std": 59.849200222652364,
-        "spread_std_window": 20,
-        "zscore_threshold": 1.5,
-        "target_position": 95
+        # "de"
     }
 }
 
@@ -100,141 +91,198 @@ class Trader:
         
         return synthetic_od
 
-    def fair_price_calc(self, state : TradingState, basket : Product, spread_data : Dict[str, Any], adjust_inventory : bool = False):
-        """
-        ver 1
-        Fair price = midprice of basket - z_score*(std of spread differences)
-        ver 2
-        Fair price = midprice of basket - z_score*(std of spread differences) - position*volatility*risk_aversion_param
-        """
+    def get_best_ask_best_bid(self, state : TradingState, product : Product, first : bool = False):
+        order_depth = state.order_depths[product]
+        buy_orders = order_depth.buy_orders
+        sell_orders = order_depth.sell_orders
         
-        synthetic_od : OrderDepth = self.get_synthetic_basket_depth(state, basket)
-        synthetic_basket_bid = [*synthetic_od.buy_orders.keys()][0]
-        synthetic_basket_ask = [*synthetic_od.sell_orders.keys()][0]
-        synthetic_mid = (synthetic_basket_ask+synthetic_basket_bid)/2
-        
-        actual_depth = state.order_depths[basket]
-        
-        best_bid = None
-        if actual_depth.buy_orders:
-            max_vol = 0
-            for price, quantity in actual_depth.buy_orders.items():
-                if abs(quantity)>max_vol:
-                    max_vol = abs(quantity)
-                    best_bid = price
-        else:
-            best_bid = spread_data['prev_basket_bid']
-        spread_data['prev_basket_bid'] = best_bid
-        
-        best_ask = None
-        if actual_depth.sell_orders:
-            max_vol = 0
-            for price, quantity in actual_depth.sell_orders.items():
-                if abs(quantity)>max_vol:
-                    max_vol = abs(quantity)
-                    best_ask = price
-        else:
-            best_ask = spread_data['prev_basket_ask']
-        spread_data['prev_basket_ask'] = best_ask
-
-        actual_mid = (best_bid+best_ask)/2
-        return actual_mid
-        
-        spread = synthetic_mid-actual_mid     
-        spread_product = None
-        if basket == Product.PICNIC_1:
-            spread_product = Product.SPREAD_1
-        elif basket == Product.PICNIC_2:
-            spread_product = Product.SPREAD_2    
-
-        window_size = self.params[spread_product]['spread_std_window']
-        spread_data['spread_history'].append(spread)
-        spread_hist = spread_data['spread_history']
-        if len(spread_hist) > window_size:
-            spread_hist.pop(0)
-
-        mu = self.params[spread_product]['default_spread_mean']
-        std = None
-        if len(spread_hist) < window_size:
-            std = self.params[spread_product]['default_spread_std']
-        else:
-            std = np.std(spread_hist)
-        
-        z_score = (spread - mu)/std
-        shift = max(abs(z_score)*self.params[spread_product]['difference_std'],3)
-
-        current_basket_position = state.position.get(basket,0)
-
-        if adjust_inventory:
-            basket_fair_price = actual_mid + (abs(z_score)/z_score)*shift + current_basket_position//3
-        else:
-            basket_fair_price = actual_mid - (abs(z_score)/z_score)*shift
+        if first:
+            buy_p = [*buy_orders.keys()]
+            best_bid = None
+            if len(buy_p) > 1:
+                best_bid = max(*buy_orders.keys())
+            else:
+                best_bid = buy_p[0]
             
-        return basket_fair_price
+            sell_p = [*sell_orders.keys()]
+            best_ask = None
+            if len(sell_p) > 1:
+                best_ask = min(*sell_orders.keys())
+            else:
+                best_ask = sell_p[0]
 
-    def basket_orders(self, state : TradingState, basket : Product, spread_data : Dict[str, Any], adjust_inventory : bool = False):
-        orders = []
+            mid = (best_ask + best_bid)//2
+            return mid, (best_bid, buy_orders[best_bid]), (best_ask, sell_orders[best_ask])    
         
-        fair_value = self.fair_price_calc(state, basket, spread_data, adjust_inventory=adjust_inventory)
-        print(fair_value)
-        
-        order_depth = state.order_depths[basket]
-        if len(order_depth.buy_orders) > 1:
-            best_bid = max(*order_depth.buy_orders.keys())
+        max_vol = 0
+        bid = 0
+        if len(buy_orders) > 1:
+            for p,q in buy_orders.items():
+                if abs(q)>max_vol:
+                    max_vol = abs(q)
+                    bid = p 
+            bid_vol = max_vol
         else:
-            best_bid = order_depth.buy_orders.keys()
-        if len(order_depth.sell_orders) > 1:
-            best_ask = min(*order_depth.sell_orders.keys())
+            bid = [*buy_orders.keys()][0]
+            bid_vol = buy_orders[bid]
+        
+        max_vol = 0
+        ask = 0
+        if len(sell_orders) > 1:
+            for p,q in sell_orders.items():
+                if abs(q)>max_vol:
+                    max_vol = abs(q)
+                    ask = p
+            ask_vol = max_vol
         else:
-            best_ask = order_depth.sell_orders.keys()
+            ask = [*sell_orders.keys()][0]
+            ask_vol = sell_orders[ask]
+            
+        mid = (ask + bid)//2
+        
+        return mid, (bid, bid_vol), (ask, ask_vol)
 
-        position = state.position.get(basket, 0)
-        position_limit = self.LIMIT[basket]
-        take_width = 1
-        
-        max_buys = position_limit - position
-        max_sells = - position_limit - position
-        
-        fair_bid = np.floor(fair_value)-take_width
-        fair_ask = np.ceil(fair_value)+take_width
-        
-        if fair_bid < best_bid:
-            fair_bid = best_bid
-        if fair_ask > fair_ask:
-            fair_ask = fair_ask
+    def update_history(self, state : TradingState, product : Product, traderObject):
+        _, bid_tup, ask_tup = self.get_best_ask_best_bid(state, product)
+        mid = (bid_tup[0] + ask_tup[0])/2
+        exec_trades = state.market_trades.get(product, [])
+        _ = []
+        for trade in exec_trades:
+            if trade.price < mid:
+                _.append((trade.price, -trade.quantity))
+            else:
+                _.append((trade.price, trade.quantity))
+        exec_trades = _
+        if exec_trades:
+            traderObject[product]['time_since_last_trade'] = 0 
+        else:
+            traderObject[product]['time_since_last_trade'] += 1
 
-        if best_bid < fair_value < best_ask:        
-            orders.append(Order(basket, round(fair_bid), max_buys))
-            orders.append(Order(basket, round(fair_ask), max_sells))
-        elif fair_value < best_bid:
-            orders.append(Order(basket, best_bid, max_sells))
-        elif fair_value > best_ask:
-            orders.append(Order(basket, best_ask, max_buys))
+        traderObject[product]['executed_orders'].append(exec_trades)
+        traderObject[product]['mid_price'].append(mid)
+        window_limit = self.params[product]['history_length']
+
+        if len(traderObject[product]['executed_orders']) > window_limit:
+            traderObject[product]['executed_orders'].pop(0)
+        if len(traderObject[product]['mid_price']) > window_limit:
+            traderObject[product]['mid_price'].pop(0)
         
-        return orders
+    def get_book_pressure_trade_impulse(self, state: TradingState, product: Product, traderObject):
+        productObject =  traderObject[product] 
+        exec_orders = productObject['executed_orders']
+        mid_prices = productObject['mid_price']
+
+        exists_trades = any([len(orders)>0 for orders in exec_orders])
+
+        # Book pressure : Volume + Time WAP derived from executed trades
+        # Trade impulse : volume ratio metric of executed trades, time weighted
+        book_pressure = 0
+        total_quantity = 0
+        trade_impulse = 0        
+        if exists_trades:
+            for i, trades in enumerate(exec_orders):
+                for trade in trades:
+                    p,q = trade
+                    book_pressure += abs(q)*p*np.exp(i)
+                    total_quantity += abs(q)*np.exp(i)    
+            book_pressure /= total_quantity  
+            last_trade_set = exec_orders[-1] 
+            
+            for trade in last_trade_set:
+                _,q = trade
+                trade_impulse += q
+            trade_impulse *= np.exp(i)   
+            trade_impulse /= total_quantity
+                 
+        else:
+            book_pressure = mid_prices[-1]
+            total_quantity = 0
+            trade_impulse = 0
+
+        trade_impulse_adj = self.params[product]['trade_impulse_adj']
+        tick_size = self.params[product]['tick_size']
+
+        fair_value = book_pressure + trade_impulse_adj*trade_impulse*tick_size
+        
+        return fair_value, book_pressure, trade_impulse
+
+    def time_weighted_fair_price_trend_vol_adjusted(self, state:TradingState, product : Product, traderObject):
+        fair, book, impulse = self.get_book_pressure_trade_impulse(state, product, traderObject)
+        mid, _, _ = self.get_best_ask_best_bid(state, product)
+        exp_coeff = np.exp(traderObject[product]['time_since_last_trade'])
+        trend_coeff = self.get_trend_coefficient(state, product, traderObject)
+        volatility = self.get_volatility(state, product , traderObject)
+        twap = (mid*exp_coeff + fair/(volatility/8)) / (1/(volatility/8) + exp_coeff)        
+        return twap + trend_coeff
+        
+    def get_buy_sell_limits(self, state : TradingState, product : Product):
+        position = state.position.get(product,0)
+        lim = self.LIMIT[product]
+        return (lim-position,-lim-position)
+
+    def get_volatility(self, state : TradingState, product : Product, traderObject):
+        mids = traderObject[product]['mid_price']
+        if len(mids) < self.params[product]['history_length']:
+            return self.params[product]['default_volatility']
+        else:
+            diffs = []
+            for i in range(len(mids)-1):
+                diffs.append(mids[i+1]-mids[i])
+            return np.std(diffs)
+
+    def get_trend_coefficient(self, state : TradingState, product : Product, traderObject):
+        mids = traderObject[product]['mid_price']
+        if len(mids) < 2:
+            return 0
+        else:
+            diffs = []
+            for i in range(len(mids)-1):
+                diffs.append(mids[i+1]-mids[i])
+            return np.mean(diffs)
 
     def run(self, state: TradingState):
         traderObject = {}
         if state.traderData != None and state.traderData != "":
             traderObject = jsonpickle.decode(state.traderData)
         
-        if Product.SPREAD_1 not in traderObject:
-            traderObject[Product.SPREAD_1] = {
-                "spread_history" : [],
-                "prev_basket_bid" : None,
-                "prev_basket_ask" : None,
+        if Product.PICNIC_1 not in traderObject:
+            traderObject[Product.PICNIC_1] = {
+                "executed_orders" : [],
+                "mid_price" : [],
+                "time_since_last_trade" : 0
             }
-        if Product.SPREAD_2 not in traderObject:
-            traderObject[Product.SPREAD_2] = {
-                "spread_history": [],
-                "prev_basket_bid" : None,
-                "prev_basket_ask" : None,
-            }            
-
+        
         result = {}
-        conversions = 1
-        result[Product.PICNIC_1] = self.basket_orders(state, Product.PICNIC_1, traderObject[Product.SPREAD_1])
+        
+        self.update_history(state, Product.PICNIC_1, traderObject)
+        mid, bid, ask = self.get_best_ask_best_bid(state, Product.PICNIC_1)
+        # fair, pressure, impulse = self.get_book_pressure_trade_impulse(state,Product.PICNIC_1,traderObject)
+        fair = self.time_weighted_fair_price_trend_vol_adjusted(state, Product.PICNIC_1, traderObject)
+        
+        buy_lim, sell_lim = self.get_buy_sell_limits(state, Product.PICNIC_1)
+        
+        orders = []
+        volatility = self.get_volatility(state, Product.PICNIC_1, traderObject)
+        buffer = min(2*volatility,0)
+                
+        if fair >  ask[0] + buffer:
+            order = Order(Product.PICNIC_1, ask[0], buy_lim)
+            orders.append(order)
+        elif fair < bid[0] - buffer:
+            order = Order(Product.PICNIC_1, bid[0], sell_lim)        
+            orders.append(order)
+        else:
+            order = Order(Product.PICNIC_1, int(math.floor(fair - 3)), buy_lim)
+            orders.append(order)
+            order = Order(Product.PICNIC_1, int(math.ceil(fair + 3)), sell_lim)
+            orders.append(order)
 
+        print((fair, buffer))        
+        result[Product.PICNIC_1] = orders
+
+               
+        conversions = 1
+        
         traderData = jsonpickle.encode(traderObject)
 
         return result, conversions, traderData

@@ -416,6 +416,7 @@ class Trader:
             picnic_1_position,
             traderObject[Product.SPREAD_1],
         )
+        spread_orders=  None
         
         spread_orders_2 = self.spread_orders(
             state.order_depths,
