@@ -11,7 +11,7 @@ st.set_page_config(layout="wide")
 st.header('IMC Trading logs plot')
 
 #-------------------------------------------------Setup -------------------------------------------------------
-file_paths = ["TutorialRound/logs","Round1/logs","Round2/logs","Round3/logs","Round4/logs","backtests"]
+file_paths = ["TutorialRound/logs","Round1/logs","Round2/logs","Round3/logs","Round4/logs","Round5/logs","backtests"]
 option_path = st.selectbox(
      'Round: Round3',
      file_paths)

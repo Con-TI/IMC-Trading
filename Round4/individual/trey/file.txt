@@ -1,0 +1,27 @@
+fig,ax = plt.subplots(nrows=3,figsize=(40,30))
+
+best_pnl = 0
+params = None
+for i in range(2,20):
+    for j in range(25,60):
+        for k in range(3,30):
+            fast = i
+            slow = j
+            window_of_macd = k
+            macd = djembes.mid_price.rolling(fast).mean()-djembes.mid_price.rolling(slow).mean()
+            macd_macd = macd.rolling(window_of_macd).mean()
+            signal = np.sign(np.sign(macd-macd_macd).diff().replace(0,np.nan).ffill())
+            final = (signal*djembes.mid_price.diff().shift(-1)).fillna(0).cumsum().iloc[-1]
+            if final > best_pnl:
+                best_pnl = final
+                params = (fast, slow, window_of_macd)
+fast, slow, window_of_macd = params
+ax[0].plot(djembes.mid_price)
+ax[0].plot(djembes.mid_price.rolling(fast).mean())
+ax[0].plot(djembes.mid_price.rolling(slow).mean())
+macd = djembes.mid_price.rolling(fast).mean()-djembes.mid_price.rolling(slow).mean()
+macd_macd = macd.rolling(window_of_macd).mean()
+ax[1].plot(macd)
+ax[1].plot(macd_macd)
+signal = np.sign(np.sign(macd-macd_macd).diff().replace(0,np.nan).ffill())
+ax[2].plot((signal*djembes.mid_price.diff().shift(-1)).cumsum())
