@@ -3,6 +3,7 @@ from typing import List, Tuple, Dict
 import jsonpickle
 import numpy as np
 import math
+import pandas as pd
 
 class Product:
     MACARONS = "MAGNIFICENT_MACARONS"
@@ -42,6 +43,9 @@ class Trader:
                 "mid_price" : [],
             }
 
+        if 'kal_signal' not in trader_data:
+            trader_data['kal_signal'] = []
+
 
         self.update_history(state, Product.MACARONS, trader_data)
         
@@ -74,6 +78,12 @@ class Trader:
         if len(trader_data['sugar_history'])>10:
             trader_data['sugar_history'] = trader_data['sugar_history'][-10:]
 
+        macaron_mid = pd.Series(trader_data[Product.MACARONS]['mid_price'])
+        sugar_mid = []
+        for stamp in trader_data['sugar_history']:
+            sugar_mid.append(stamp['value'])
+        sugar_mid = pd.Series(sugar_mid)
+        trader_data['kal_signal'] = self.kalman_filter_two_observations(macaron_mid, sugar_mid)
 
         # Get current position
         position = state.position.get(Product.MACARONS, 0)
@@ -112,10 +122,44 @@ class Trader:
         trader_data_encoded = jsonpickle.encode(trader_data)
         
         return result, conversions, trader_data_encoded
+    
+    def kalman_filter_two_observations(macaron_price: pd.Series, sugar_price: pd.Series, Q: float = 1e-5, R_M: float = 1e-2, R_S: float = 1e-2):
+        # Q - process noise, higher = fair value changes quicker (default 10^-4 or -5)
+        # R_M/S observation noise for macaroon and sugar respectively, lower = more trust in price, 
+        # default between 10^-2 to 1
+
+        macaron_price = pd.Series(macaron_price)
+        sugar_price = pd.Series(sugar_price)
+        n = len(macaron_price)
+        x_est = np.zeros(n)  # Estimated latent fair value
+        P = 1.0  # Initial state covariance
+        x = macaron_price.iloc[0]  # Initial state estimate
+
+        for t in range(n):
+            # Prediction
+            x_prior = x
+            P_prior = P + Q
+
+            # Observations (weighted average of A and B)
+            z_A = macaron_price.iloc[t]
+            z_B = sugar_price.iloc[t]
+            R = 1 / (1/R_M + 1/R_S)  # Combined observation noise
+            z = (z_A / R_M + z_B / R_S) * R  # Weighted average observation
+
+            # Kalman Gain
+            K = P_prior / (P_prior + R)
+
+            # Update
+            x = x_prior + K * (z - x_prior)
+            P = (1 - K) * P_prior
+
+            x_est[t] = x
+
+        return pd.Series(x_est, index=macaron_price.index)
+
 
     def update_history(self, state : TradingState, product : Product, trader_data):
-        _, bid_tup, ask_tup = self.get_best_ask_best_bid(state, product)
-        mid = (bid_tup[0] + ask_tup[0])/2
+        mid, bid_tup, ask_tup = self.get_best_ask_best_bid(state, product)
         trader_data[product]['mid_price'].append(mid)
         window_limit = 10
         if len(trader_data[product]['mid_price']) > window_limit:
@@ -197,9 +241,11 @@ class Trader:
 
         macaroon_prices = trader_data[Product.MACARONS]['mid_price']
         sugar_prices = trader_data["sugar_history"]
+        kalman_sig = trader_data['kal_signal']
+        kal_threshold = 0.5
         
-        grad_threshold = 10000000#0.25
-        diff_threshold = 15
+        grad_threshold = 0.25
+        diff_threshold = 10
 
         if len(sugar_prices)==10 and len(macaroon_prices)==10:
             sugar_grad = (sugar_prices[0]["value"]-sugar_prices[-1]["value"])/10
@@ -243,43 +289,37 @@ class Trader:
         
         # Add premium to fair value
         fair_value = base_fair_value + premium + price_adj
-        
-        print(f"Below CSI Strategy - Severity: {severity:.2f}, Premium: {premium}")
-        print(f"Base Fair Value: {base_fair_value}, Adjusted Fair Value: {fair_value}")
-        
+
         # Calculate available buy/sell capacity
         buy_capacity = self.POSITION_LIMIT[Product.MACARONS] - position
         sell_capacity = self.POSITION_LIMIT[Product.MACARONS] + position
         
-        # Take undervalued sell orders
-        for price in sorted(order_depth.sell_orders.keys()):
-            if price > fair_value - self.TAKE_EDGE:
-                break
-                
-            quantity = min(abs(order_depth.sell_orders[price]), buy_capacity)
-            if quantity > 0:
-                orders.append(Order(Product.MACARONS, price, quantity))
-                buy_capacity -= quantity
-        
-        # If trend is negative, be more aggressive in buying
-        bid_edge = self.MIN_EDGE
-        ask_edge = self.MAX_EDGE
-        
-        if trend < -0.5:  # Strong downward trend in sunlight
-            # Be more aggressive with buying, less aggressive with selling
+        signal = list(kalman_sig) - macaroon_prices
+        kal_position = []
+        current_kal_pos = 0 # 1 long, -1 short, 0 hold
+
+        for s in signal:
+            if current_kal_pos == 0:
+                if s > kal_threshold:
+                    current_kal_pos = 1  # enter long
+                elif s < -kal_threshold:
+                    current_kal_pos = -1  # enter short
+            elif current_kal_pos == 1 and s < 0:
+                current_kal_pos = 0  # close long
+            elif current_kal_pos == -1 and s > 0:
+                current_kal_pos = 0  # close short
+            kal_position.append(current_kal_pos)
+
+        if kal_position[-1] ==0 or kal_position[-1] == -1 :
+            # revert to market making strat if kalman says short or hold, bc then the sugar has tracked price well       
+            return self.execute_normal_strategy(state, position, fair_value=fair_value)
+        elif kal_position[-1] == 1:
+            # execute more aggressive long if kalman also says go long
             bid_edge = max(1, self.MIN_EDGE - int(abs(trend) * 2))
-            ask_edge = self.MAX_EDGE + int(premium / 2)
-        
-        # Place bid at adjusted fair value
-        if buy_capacity > 0:
             bid_price = int(fair_value - bid_edge)
             orders.append(Order(Product.MACARONS, bid_price, buy_capacity))
-        
-        # Place ask at adjusted fair value plus premium
-        if sell_capacity > 0:
-            ask_price = int(fair_value + ask_edge)
-            orders.append(Order(Product.MACARONS, ask_price, -sell_capacity))
-        
+
+            
         # Determine conversions based on position and strategy
         # When below CSI, we want to limit selling and favor buying
         if position > 50:  # If we have a large position
@@ -290,7 +330,7 @@ class Trader:
             
         return orders, conversions
 
-    def execute_normal_strategy(self, state, position):
+    def execute_normal_strategy(self, state, position, *, fair_value = -1):
         """Strategy when sunlight is above CSI."""
         orders = []
         
@@ -303,7 +343,8 @@ class Trader:
         implied_ask = observation.askPrice + observation.importTariff + observation.transportFees
         
         # Fair value is the midpoint of implied bid and ask
-        fair_value = (implied_bid + implied_ask) / 2
+        if fair_value == -1:
+            fair_value = (implied_bid + implied_ask) / 2
         
         print(f"Normal Strategy - Fair Value: {fair_value}")
         print(f"Implied bid: {implied_bid}, Implied ask: {implied_ask}")
