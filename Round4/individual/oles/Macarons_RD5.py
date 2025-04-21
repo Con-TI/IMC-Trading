@@ -182,11 +182,11 @@ class Trader:
 
     def calculate_recent_trend(self, sunlight_history):
         """Calculate if sunlight is trending downward."""
-        if len(sunlight_history) < 3:
+        if len(sunlight_history) < 10:
             return 0
         
         # Get the most recent values
-        recent_values = [entry["value"] for entry in sunlight_history[-3:]]
+        recent_values = [entry["value"] for entry in sunlight_history[-10:]]
         
         # Simple slope calculation
         x = np.arange(len(recent_values))
@@ -293,8 +293,8 @@ class Trader:
         
         # Determine conversions based on position and strategy
         # When below CSI, we want to limit selling and favor buying
-        if position > 50:  # If we have a large position
-            conversions = max(-self.CONVERSION_LIMIT[Product.MACARONS], -position + 40)
+        if position > 8:  # If we have a large position
+            conversions = max(-self.CONVERSION_LIMIT[Product.MACARONS], -position + 4)
         else:
             # Don't convert if position is reasonable or negative
             conversions = 0
@@ -355,7 +355,7 @@ class Trader:
         
         # In normal market conditions, try to keep position balanced
         # If position is large in either direction, convert to reduce it
-        if abs(position) > 40:
+        if abs(position) > 8:
             conversions = max(min(-position, self.CONVERSION_LIMIT[Product.MACARONS]), 
                              -self.CONVERSION_LIMIT[Product.MACARONS])
         else:
