@@ -46,9 +46,8 @@ class Trader:
         if 'kal_signal' not in trader_data:
             trader_data['kal_signal'] = []
 
-
         self.update_history(state, Product.MACARONS, trader_data)
-        
+    
         # Store current sunlight index
         if Product.MACARONS not in state.observations.conversionObservations:
             # No macaron data available
@@ -83,6 +82,9 @@ class Trader:
         for stamp in trader_data['sugar_history']:
             sugar_mid.append(stamp['value'])
         sugar_mid = pd.Series(sugar_mid)
+
+        print(macaron_mid.iloc[1])
+        print(sugar_mid.iloc[1])
         trader_data['kal_signal'] = self.kalman_filter_two_observations(macaron_mid, sugar_mid)
 
         # Get current position
@@ -159,8 +161,12 @@ class Trader:
 
 
     def update_history(self, state : TradingState, product : Product, trader_data):
-        mid, bid_tup, ask_tup = self.get_best_ask_best_bid(state, product)
-        trader_data[product]['mid_price'].append(mid)
+        if trader_data[product]['mid_price'] == []:
+            mid, bid_tup, ask_tup = self.get_best_ask_best_bid(state, product, first = True)
+        else:
+            mid, bid_tup, ask_tup = self.get_best_ask_best_bid(state, product)
+
+        trader_data[product]['mid_price'].append(float(mid))
         window_limit = 10
         if len(trader_data[product]['mid_price']) > window_limit:
             trader_data[product]['mid_price'].pop(0)
