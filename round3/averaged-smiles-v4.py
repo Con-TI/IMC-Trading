@@ -28,7 +28,7 @@ PARAMS = {
     },
     Product.VOUCHER_10000: {
         "strike": 10000,
-        "position_sizing": 0.1,
+        "position_sizing": 1,
         "vol_edge_threshold": 0.0001,
     },
     Product.VOUCHER_10250: {
@@ -112,7 +112,7 @@ class Trader:
             Product.ROCK: 400,
             Product.VOUCHER_9500: 200,
             Product.VOUCHER_9750: 200,
-            Product.VOUCHER_10000: 200,
+            Product.VOUCHER_10000: 20,
             Product.VOUCHER_10250: 200,
             Product.VOUCHER_10500: 200,
         }
