@@ -1,4 +1,4 @@
-# IMC-Trading
+# IMC-Trading (Final rank: 163rd / 12k+)
 
 Formatting:
 - When you want to download a log file and add it to our folder, name it {file_name}@{date}{24 hr time}.log. E.g. tutorial1py@14_03_2025_1508.log
