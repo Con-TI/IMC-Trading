@@ -21,12 +21,12 @@ PARAMS = {
         "default_spread_std": 85.11945080948948944,
         "spread_std_window": 45,
         "zscore_threshold": 3,
-        "target_position": 60,
+        "target_position": 59,
     },
     Product.SPREAD_2: {
         "default_spread_mean": 30.23596666666666,
         "default_spread_std": 59.849200222652364,
-        "spread_std_window": 24,
+        "spread_std_window": 25,
         "zscore_threshold": 1.5,
         "target_position": 99
     }
@@ -765,19 +765,20 @@ class Trader:
             jams_position = (state.position[Product.JAMS] if Product.JAMS in state.position else 0)
             jams_final_q = max(min(jams_final_q,self.LIMIT[Product.JAMS])-jams_position,-self.LIMIT[Product.JAMS]-jams_position)
 
-            croissants_ask = min(state.order_depths[Product.CROISSANTS].sell_orders.keys())
-            croissants_bid = max(state.order_depths[Product.CROISSANTS].buy_orders.keys())
             if croissant_final_q > 0:
-                result[Product.CROISSANTS] = [Order(Product.CROISSANTS, croissants_ask, croissant_final_q)]                
-            else:
-                result[Product.CROISSANTS] = [Order(Product.CROISSANTS, croissants_bid, croissant_final_q)]    
+                croissants_price = min(state.order_depths[Product.CROISSANTS].sell_orders.keys())
+                result[Product.CROISSANTS] = [Order(Product.CROISSANTS, croissants_price, croissant_final_q)]
 
-            jams_ask = min(state.order_depths[Product.JAMS].sell_orders.keys())
-            jams_bid = max(state.order_depths[Product.JAMS].buy_orders.keys())
-            if jams_final_q > 0:
-                result[Product.JAMS] = [Order(Product.JAMS, jams_ask, jams_final_q)]                
             else:
-                result[Product.JAMS] = [Order(Product.JAMS, jams_bid, jams_final_q)]    
+                croissants_price = max(state.order_depths[Product.CROISSANTS].buy_orders.keys())
+                result[Product.CROISSANTS] = [Order(Product.CROISSANTS, croissants_price, croissant_final_q)]
+
+            if jams_final_q > 0:
+                jams_price = min(state.order_depths[Product.JAMS].sell_orders.keys())
+                result[Product.JAMS] = [Order(Product.JAMS, jams_price, jams_final_q)]
+            else:
+                jams_price = max(state.order_depths[Product.JAMS].buy_orders.keys())
+                result[Product.JAMS] = [Order(Product.JAMS, jams_price, jams_final_q)]
 
             result[Product.DJEMBES] = spread_orders[Product.DJEMBES]
             result[Product.PICNIC_1] = spread_orders[Product.PICNIC_1]

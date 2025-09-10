@@ -11,12 +11,12 @@ st.set_page_config(layout="wide")
 st.header('IMC Trading logs plot')
 
 #-------------------------------------------------Setup -------------------------------------------------------
-file_paths = ["TutorialRound/logs","Round1/logs","Round2/logs","Round3/logs","Round4/logs","backtests"]
+file_paths = ["TutorialRound/logs","Round1/logs","Round2/logs","Round3/logs","Round4/logs","Round5/logs","backtests"]
 option_path = st.selectbox(
-     'Round:',
+     'Round: Round3',
      file_paths)
 option_log = st.selectbox(
-    'Log:',
+    'Log: BS_with_delta@16_06_2025_1052.log',
     os.listdir(f"../{option_path}")
 )
 file_path = f"../{option_path}/{option_log}"
